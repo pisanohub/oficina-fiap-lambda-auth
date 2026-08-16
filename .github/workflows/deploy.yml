@@ -1,0 +1,91 @@
+name: CD - Deploy Lambda AWS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "pom.xml"
+      - "terraform/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lambda-auth-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Lambda e API Gateway
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: dev
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_environment: "dev"
+      TF_VAR_lambda_subnet_ids: ${{ vars.LAMBDA_SUBNET_IDS }}
+      TF_VAR_lambda_security_group_id: ${{ vars.LAMBDA_SECURITY_GROUP_ID }}
+      TF_VAR_db_host: ${{ vars.DB_HOST }}
+      TF_VAR_db_port: ${{ vars.DB_PORT }}
+      TF_VAR_db_name: ${{ vars.DB_NAME }}
+      TF_VAR_db_username: ${{ secrets.DB_USERNAME }}
+      TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Compilar e testar
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Configurar credenciais temporarias da AWS Academy
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.13.0"
+
+      - name: Inicializar estado remoto
+        working-directory: terraform
+        run: >-
+          terraform init -input=false -reconfigure
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="key=lambda-auth/dev/terraform.tfstate"
+          -backend-config="region=${{ vars.AWS_REGION }}"
+          -backend-config="encrypt=true"
+          -backend-config="use_lockfile=true"
+
+      - name: Gerar plano
+        working-directory: terraform
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Aplicar infraestrutura
+        working-directory: terraform
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Registrar endpoint implantado
+        working-directory: terraform
+        shell: bash
+        run: echo "### Endpoint de autenticação" >> "$GITHUB_STEP_SUMMARY" && terraform output -raw api_url >> "$GITHUB_STEP_SUMMARY"
+

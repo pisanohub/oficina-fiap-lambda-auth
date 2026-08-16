@@ -1,0 +1,50 @@
+name: Terraform - Validacao
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-check:
+    name: Formatar e validar Terraform
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Gerar o pacote da Lambda
+        run: mvn --batch-mode --no-transfer-progress clean package -DskipTests
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.13.0"
+
+      - name: Verificar formatacao
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+
+      - name: Inicializar sem backend remoto
+        working-directory: terraform
+        run: terraform init -backend=false -input=false
+
+      - name: Validar configuracao
+        working-directory: terraform
+        run: terraform validate
+
