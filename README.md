@@ -159,3 +159,17 @@ Após o commit inicial de estruturação:
 - os ambientes de homologação e produção devem possuir deploy automatizado.
 
 O commit inicial diretamente na `main` é necessário apenas para inicializar este repositório, que foi criado completamente vazio. A proteção da branch é configurada após esse primeiro envio.
+
+## CI/CD
+
+O workflow `.github/workflows/ci.yml` executa automaticamente em Pull Requests e em atualizações da branch `main`:
+
+1. baixa o código do repositório;
+2. configura o Java 21;
+3. executa `mvn clean verify`;
+4. compila a Lambda e executa os testes;
+5. disponibiliza `oficina-cpf-auth.jar` como artefato da execução.
+
+O job obrigatório para proteção da branch chama-se `Compilar, testar e empacotar`. O merge de um Pull Request deve ser permitido somente quando esse job terminar com sucesso.
+
+O deploy contínuo será executado por um workflow separado depois da inclusão do Terraform específico da Lambda e do API Gateway. Essa separação evita misturar a infraestrutura do banco de dados neste repositório e mantém credenciais fora do código-fonte.
