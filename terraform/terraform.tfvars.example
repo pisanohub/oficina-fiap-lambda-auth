@@ -1,0 +1,17 @@
+aws_region = "us-east-1"
+aws_profile = "oficina-lab"
+
+lambda_subnet_ids = [
+  "subnet-xxxxxxxxxxxxxxxxx",
+  "subnet-yyyyyyyyyyyyyyyyy"
+]
+
+lambda_security_group_id = "sg-xxxxxxxxxxxxxxxxx"
+
+db_host     = "oficina-fiap-db.example.us-east-1.rds.amazonaws.com"
+db_port     = 5432
+db_name     = "oficina"
+db_username = "oficinaadmin"
+db_password = "NAO_VERSIONAR_A_SENHA_REAL"
+
+environment = "dev"

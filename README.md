@@ -173,3 +173,62 @@ O workflow `.github/workflows/ci.yml` executa automaticamente em Pull Requests e
 O job obrigatório para proteção da branch chama-se `Compilar, testar e empacotar`. O merge de um Pull Request deve ser permitido somente quando esse job terminar com sucesso.
 
 O deploy contínuo será executado por um workflow separado depois da inclusão do Terraform específico da Lambda e do API Gateway. Essa separação evita misturar a infraestrutura do banco de dados neste repositório e mantém credenciais fora do código-fonte.
+
+## Terraform da Lambda e do API Gateway
+
+O diretório `terraform/` gerencia exclusivamente:
+
+- a Function AWS Lambda `oficina-cpf-auth`;
+- o segredo aleatório usado para assinar o JWT;
+- o endpoint `POST /auth/cpf` no Amazon API Gateway;
+- a integração e a permissão de invocação entre API Gateway e Lambda.
+
+O Terraform deste repositório não cria RDS, EC2 ou cluster Kubernetes. Endpoint, credenciais do banco, subnets e Security Group são entradas fornecidas pela infraestrutura responsável pelo banco e pela rede.
+
+Para preparar uma execução local, copie apenas o modelo sem segredos:
+
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+```
+
+Preencha `terraform.tfvars` localmente. Esse arquivo é ignorado pelo Git e nunca deve ser enviado ao repositório.
+
+Validação local:
+
+```bash
+mvn clean package
+terraform -chdir=terraform init -backend=false
+terraform -chdir=terraform fmt -check -recursive
+terraform -chdir=terraform validate
+```
+
+O workflow `Terraform - Validacao` repete essa verificação automaticamente em Pull Requests que alterem a infraestrutura. O primeiro `apply` deste repositório exige a migração dos recursos que ainda estejam registrados no estado Terraform antigo; executar sem essa migração tentaria criar recursos com nomes já existentes.
+
+### Pipeline de deploy
+
+O workflow `CD - Deploy Lambda AWS` compila, testa, gera o plano Terraform e aplica a Lambda e o API Gateway após mudanças na `main`. O job permanece desabilitado até que a migração do estado seja concluída e a variável `DEPLOY_ENABLED` receba o valor `true`.
+
+Variáveis do GitHub Actions:
+
+| Variável | Exemplo/descrição |
+|---|---|
+| `DEPLOY_ENABLED` | `false` durante a migração; `true` depois dela |
+| `AWS_REGION` | `us-east-1` |
+| `TF_STATE_BUCKET` | Bucket S3 exclusivo para o estado Terraform |
+| `LAMBDA_SUBNET_IDS` | Lista JSON, por exemplo `["subnet-a","subnet-b"]` |
+| `LAMBDA_SECURITY_GROUP_ID` | Security Group autorizado no RDS |
+| `DB_HOST` | Endpoint privado do RDS |
+| `DB_PORT` | `5432` |
+| `DB_NAME` | `oficina` |
+
+Secrets do GitHub Actions:
+
+| Secret | Finalidade |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | Credencial temporária do AWS Academy |
+| `AWS_SECRET_ACCESS_KEY` | Credencial temporária do AWS Academy |
+| `AWS_SESSION_TOKEN` | Token temporário obrigatório do laboratório |
+| `DB_USERNAME` | Usuário do PostgreSQL |
+| `DB_PASSWORD` | Senha do PostgreSQL |
+
+As três credenciais AWS expiram quando a sessão do laboratório termina e precisam ser atualizadas antes de um novo deploy. Nenhum valor secreto deve ser incluído em commits ou logs.
