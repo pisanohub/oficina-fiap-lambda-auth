@@ -1,0 +1,11 @@
+target/
+.idea/
+*.iml
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+*.zip
+*.jar
+
