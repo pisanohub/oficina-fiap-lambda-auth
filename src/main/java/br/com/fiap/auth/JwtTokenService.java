@@ -1,6 +1,7 @@
 package br.com.fiap.auth;
 
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.security.Keys;
 
 import javax.crypto.SecretKey;
@@ -14,15 +15,21 @@ public class JwtTokenService {
     private final long expiracaoSegundos;
 
     public JwtTokenService() {
-        String segredo = System.getenv("JWT_SECRET");
+        this(System.getenv("JWT_SECRET"), Long.parseLong(
+                System.getenv().getOrDefault("JWT_EXPIRATION_SECONDS", "3600")
+        ));
+    }
+
+    JwtTokenService(String segredo, long expiracaoSegundos) {
         if (segredo == null || segredo.length() < 32) {
             throw new IllegalStateException("JWT_SECRET deve possuir pelo menos 32 caracteres");
         }
+        if (expiracaoSegundos <= 0) {
+            throw new IllegalArgumentException("A expiracao do JWT deve ser maior que zero");
+        }
 
         this.chave = Keys.hmacShaKeyFor(segredo.getBytes(StandardCharsets.UTF_8));
-        this.expiracaoSegundos = Long.parseLong(
-                System.getenv().getOrDefault("JWT_EXPIRATION_SECONDS", "3600")
-        );
+        this.expiracaoSegundos = expiracaoSegundos;
     }
 
     public String gerarToken(Cliente cliente) {
@@ -37,5 +44,16 @@ public class JwtTokenService {
                 .signWith(chave)
                 .compact();
     }
-}
 
+    public Claims validarToken(String token) {
+        return Jwts.parser()
+                .verifyWith(chave)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+
+    public long getExpiracaoSegundos() {
+        return expiracaoSegundos;
+    }
+}

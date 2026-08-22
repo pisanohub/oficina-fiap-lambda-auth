@@ -14,4 +14,8 @@ db_name     = "oficina"
 db_username = "oficinaadmin"
 db_password = "NAO_VERSIONAR_A_SENHA_REAL"
 
+# Contrato com o time da aplicacao/Kubernetes. Deve ser uma URL alcancavel
+# pelo API Gateway, sem o caminho /api no final.
+app_base_url = "https://api.exemplo.com"
+
 environment = "dev"

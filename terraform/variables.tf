@@ -78,3 +78,13 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "app_base_url" {
+  description = "URL base publica da aplicacao principal, sem /api no final, fornecida pelo time do Kubernetes"
+  type        = string
+
+  validation {
+    condition     = can(regex("^https?://", var.app_base_url))
+    error_message = "app_base_url deve iniciar com http:// ou https://."
+  }
+}
+
