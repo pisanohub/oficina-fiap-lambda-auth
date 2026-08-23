@@ -1,6 +1,18 @@
 # Oficina FIAP — Lambda de autenticação por CPF
 
-Este repositório contém a Function Serverless responsável pela autenticação dos clientes da Oficina FIAP. Ele é um dos quatro repositórios independentes exigidos pelo trabalho acadêmico e possui responsabilidade exclusiva sobre a autenticação por CPF.
+Este repositório contém as Functions Serverless responsáveis pela autenticação dos clientes da Oficina FIAP e o API Gateway que protege as rotas destinadas ao cliente. Ele é um dos quatro repositórios independentes exigidos pelo trabalho acadêmico.
+
+## Limite de responsabilidade
+
+Este repositório gerencia somente:
+
+- autenticação do cliente por CPF;
+- emissão e validação de JWT;
+- Lambda Authorizer;
+- API Gateway e o proxy das rotas protegidas;
+- CI/CD deste componente.
+
+Ele **não cria nem modifica** RDS, EC2, cluster Kubernetes, manifests da aplicação ou regras de negócio. O time responsável pela aplicação fornece apenas uma URL pública alcançável pelo API Gateway.
 
 ## Responsabilidade deste repositório
 
@@ -15,9 +27,16 @@ A função executa o seguinte fluxo:
 7. devolve o token para consumo das APIs protegidas.
 
 ```text
-Cliente -> API Gateway -> AWS Lambda -> PostgreSQL/RDS
-                              |
-                              +-> JWT
+1. Emissão do token
+
+Cliente -> POST /auth/cpf -> Lambda CPF -> PostgreSQL/RDS
+                                      |
+                                      +-> JWT
+
+2. Consumo de rota protegida
+
+Cliente -> /api/{proxy+} -> Lambda Authorizer -> aplicação principal
+              Bearer JWT        Allow/Deny       (URL fornecida pelo time Kubernetes)
 ```
 
 ## Separação dos repositórios
@@ -50,9 +69,12 @@ src/
 │   ├── ClienteRepository.java
 │   ├── CpfAuthHandler.java
 │   ├── CpfValidator.java
+│   ├── JwtAuthorizerHandler.java
 │   └── JwtTokenService.java
 └── test/java/br/com/fiap/auth/
-    └── CpfValidatorTest.java
+    ├── CpfValidatorTest.java
+    ├── JwtAuthorizerHandlerTest.java
+    └── JwtTokenServiceTest.java
 ```
 
 ## Contrato da autenticação
@@ -125,14 +147,15 @@ O comando compila o código, executa os testes unitários e produz o pacote comp
 target/oficina-cpf-auth.jar
 ```
 
-Atualmente a suíte cobre CPF válido formatado e não formatado, normalização, dígito verificador incorreto, sequência repetida e valor vazio/nulo.
+A suíte contém 11 testes e cobre CPF válido formatado e não formatado, normalização, dígito verificador, geração e validação do JWT, segredo inválido, policy `Allow` e rejeição `Deny` do authorizer.
 
 ## Configuração da AWS Lambda
 
 | Propriedade | Valor |
 |---|---|
 | Runtime | Java 21 |
-| Handler | `br.com.fiap.auth.CpfAuthHandler::handleRequest` |
+| Handler de autenticação | `br.com.fiap.auth.CpfAuthHandler::handleRequest` |
+| Handler do authorizer | `br.com.fiap.auth.JwtAuthorizerHandler::handleRequest` |
 | Artefato | `target/oficina-cpf-auth.jar` |
 
 A função precisa de conectividade de rede com o PostgreSQL/RDS e das variáveis de ambiente descritas anteriormente.
@@ -147,6 +170,33 @@ O token é assinado com `JWT_SECRET` e contém:
 - `ativo`: `true`;
 - `iat`: instante de emissão;
 - `exp`: instante de expiração.
+
+## Proteção das rotas com Lambda Authorizer
+
+O endpoint `POST /auth/cpf` é público porque é usado para obter o token. As rotas sob `/api/{proxy+}` usam autorização `CUSTOM` do API Gateway.
+
+Para cada token ainda não armazenado no cache do Gateway, o fluxo é:
+
+1. o API Gateway lê o header `Authorization`;
+2. exige o formato `Bearer <JWT>`;
+3. invoca `oficina-jwt-authorizer`;
+4. o authorizer valida assinatura e expiração;
+5. confirma as claims `tipo=CLIENTE` e `ativo=true`;
+6. devolve uma policy IAM `Allow` ou `Deny`;
+7. em caso de `Allow`, o Gateway encaminha a chamada para `${APP_BASE_URL}/api/{proxy}`.
+
+Exemplo:
+
+```http
+GET /dev/api/v1/ordens/cliente/1
+Authorization: Bearer JWT_GERADO
+```
+
+O authorizer não consulta novamente o banco. A existência e o status do cliente já foram verificados durante a emissão, e a validade curta do token limita por quanto tempo essa informação é aceita.
+
+> O API Gateway só consegue encaminhar chamadas para uma URL alcançável a partir da AWS. Um `Service` Kubernetes do tipo `ClusterIP` não é público; a equipe responsável pelo cluster deve fornecer Ingress, Load Balancer ou outro endpoint apropriado. Este repositório apenas recebe essa URL como entrada e não altera o cluster.
+
+> **Contrato de segurança:** se a URL da aplicação continuar pública e aceitar chamadas diretas, um cliente poderia contornar o API Gateway. A equipe da aplicação/cluster deve restringir o acesso direto ao backend ou manter a validação JWT também na aplicação. A implementação dessa restrição não pertence a este repositório.
 
 ## Estratégia de branches
 
@@ -172,16 +222,19 @@ O workflow `.github/workflows/ci.yml` executa automaticamente em Pull Requests e
 
 O job obrigatório para proteção da branch chama-se `Compilar, testar e empacotar`. O merge de um Pull Request deve ser permitido somente quando esse job terminar com sucesso.
 
-O deploy contínuo será executado por um workflow separado depois da inclusão do Terraform específico da Lambda e do API Gateway. Essa separação evita misturar a infraestrutura do banco de dados neste repositório e mantém credenciais fora do código-fonte.
+O deploy contínuo é executado pelo workflow separado `.github/workflows/deploy.yml`. A separação entre CI, validação Terraform e deploy evita misturar responsabilidades e mantém credenciais fora do código-fonte.
 
 ## Terraform da Lambda e do API Gateway
 
 O diretório `terraform/` gerencia exclusivamente:
 
 - a Function AWS Lambda `oficina-cpf-auth`;
+- a Function AWS Lambda `oficina-jwt-authorizer`;
 - o segredo aleatório usado para assinar o JWT;
 - o endpoint `POST /auth/cpf` no Amazon API Gateway;
-- a integração e a permissão de invocação entre API Gateway e Lambda.
+- o Lambda Authorizer;
+- o proxy protegido `/api/{proxy+}`;
+- as integrações e permissões de invocação necessárias.
 
 O Terraform deste repositório não cria RDS, EC2 ou cluster Kubernetes. Endpoint, credenciais do banco, subnets e Security Group são entradas fornecidas pela infraestrutura responsável pelo banco e pela rede.
 
@@ -202,7 +255,7 @@ terraform -chdir=terraform fmt -check -recursive
 terraform -chdir=terraform validate
 ```
 
-O workflow `Terraform - Validacao` repete essa verificação automaticamente em Pull Requests que alterem a infraestrutura. O primeiro `apply` deste repositório exige a migração dos recursos que ainda estejam registrados no estado Terraform antigo; executar sem essa migração tentaria criar recursos com nomes já existentes.
+O workflow `Terraform - Validacao` repete essa verificação automaticamente em Pull Requests que alterem a infraestrutura. Antes de habilitar o primeiro `apply`, o grupo deve configurar um backend S3 novo e fornecer as entradas da rede, do banco e da aplicação. O pipeline não cria esses recursos externos.
 
 ### Pipeline de deploy
 
@@ -220,6 +273,7 @@ Variáveis do GitHub Actions:
 | `DB_HOST` | Endpoint privado do RDS |
 | `DB_PORT` | `5432` |
 | `DB_NAME` | `oficina` |
+| `APP_BASE_URL` | URL pública da aplicação, sem `/api` no final |
 
 Secrets do GitHub Actions:
 
@@ -232,3 +286,12 @@ Secrets do GitHub Actions:
 | `DB_PASSWORD` | Senha do PostgreSQL |
 
 As três credenciais AWS expiram quando a sessão do laboratório termina e precisam ser atualizadas antes de um novo deploy. Nenhum valor secreto deve ser incluído em commits ou logs.
+
+## Como explicar esta entrega ao grupo
+
+- **CPF não é um token:** ele é a informação usada para localizar e validar o cliente.
+- **A Lambda de autenticação emite o JWT:** ela valida o documento, consulta o cadastro e assina as claims.
+- **O Authorizer valida o JWT:** ele funciona como porteiro antes das rotas protegidas.
+- **O API Gateway aplica a decisão:** somente uma policy `Allow` alcança a aplicação principal.
+- **O mesmo segredo liga emissão e validação:** as duas Lambdas recebem o mesmo `JWT_SECRET` gerado pelo Terraform.
+- **A aplicação continua pertencendo ao outro time:** este repositório apenas encaminha a requisição para `APP_BASE_URL`.

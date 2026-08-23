@@ -44,7 +44,7 @@ public class CpfAuthHandler implements RequestHandler<APIGatewayProxyRequestEven
             return resposta(200, Map.of(
                     "token", jwtService.gerarToken(cliente),
                     "tipo", "Bearer",
-                    "expiresIn", 3600,
+                    "expiresIn", jwtService.getExpiracaoSegundos(),
                     "clienteId", cliente.id()
             ));
         } catch (Exception exception) {
@@ -64,4 +64,3 @@ public class CpfAuthHandler implements RequestHandler<APIGatewayProxyRequestEven
         }
     }
 }
-

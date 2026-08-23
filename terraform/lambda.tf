@@ -39,3 +39,30 @@ resource "aws_lambda_function" "cpf_auth" {
   }
 }
 
+resource "aws_lambda_function" "jwt_authorizer" {
+  function_name = "oficina-jwt-authorizer"
+  description   = "Valida o JWT de cliente antes das rotas protegidas"
+
+  role    = data.aws_iam_role.lab_role.arn
+  runtime = "java21"
+  handler = "br.com.fiap.auth.JwtAuthorizerHandler::handleRequest"
+
+  filename         = local.lambda_jar
+  source_code_hash = filebase64sha256(local.lambda_jar)
+
+  memory_size = 256
+  timeout     = 10
+
+  environment {
+    variables = {
+      JWT_SECRET             = random_password.jwt.result
+      JWT_EXPIRATION_SECONDS = tostring(var.jwt_expiration_seconds)
+    }
+  }
+
+  tags = {
+    Name     = "oficina-jwt-authorizer"
+    Ambiente = var.environment
+  }
+}
+
