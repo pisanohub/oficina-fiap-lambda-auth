@@ -60,6 +60,16 @@ O provisionamento do RDS não pertence a este repositório. A Lambda recebe os d
 - Maven;
 - JUnit 5.
 
+## Conceitos em linguagem simples
+
+- **Function Serverless:** código executado sob demanda na nuvem. A equipe envia a função, e a AWS administra os servidores necessários para executá-la.
+- **AWS Lambda:** serviço da AWS usado para executar as Functions Serverless. Este projeto possui uma Lambda para autenticar pelo CPF e outra para autorizar as requisições.
+- **API Gateway:** porta de entrada HTTP do sistema. Ele publica as URLs, recebe as chamadas e decide para onde encaminhá-las.
+- **Lambda Authorizer:** função chamada pelo API Gateway antes de uma rota protegida. Ela confere o JWT e responde `Allow` quando o acesso pode continuar ou `Deny` quando deve ser bloqueado.
+- **JWT:** token assinado devolvido após a autenticação. Ele funciona como uma credencial temporária e precisa ser enviado no header `Authorization`.
+
+Uma analogia simples: o **API Gateway é a portaria**, a Lambda de CPF **entrega um crachá temporário**, e o Lambda Authorizer **confere esse crachá** antes de liberar uma rota protegida.
+
 ## Estrutura
 
 ```text
@@ -148,6 +158,151 @@ target/oficina-cpf-auth.jar
 ```
 
 A suíte contém 11 testes e cobre CPF válido formatado e não formatado, normalização, dígito verificador, geração e validação do JWT, segredo inválido, policy `Allow` e rejeição `Deny` do authorizer.
+
+## Como executar esta parte do projeto
+
+### 1. Pré-requisitos
+
+Instale e confira:
+
+- Git;
+- JDK 21;
+- Maven 3.9 ou superior;
+- Terraform 1.13 ou compatível;
+- AWS CLI, somente para deploy na AWS;
+- Postman, opcional para testar os endpoints.
+
+No PowerShell:
+
+```powershell
+java -version
+mvn -version
+terraform -version
+aws --version
+```
+
+### 2. Baixar o repositório
+
+```powershell
+cd C:\CODEX
+git clone https://github.com/pisanohub/oficina-fiap-lambda-auth.git
+cd oficina-fiap-lambda-auth
+```
+
+Se o repositório já estiver baixado:
+
+```powershell
+git switch main
+git pull
+```
+
+### 3. Compilar e executar os testes localmente
+
+Este passo não acessa a AWS e não cria recursos:
+
+```powershell
+mvn clean verify
+```
+
+O resultado esperado é `BUILD SUCCESS`. O arquivo enviado às Lambdas será criado em:
+
+```text
+target/oficina-cpf-auth.jar
+```
+
+### 4. Validar o Terraform sem criar recursos
+
+```powershell
+terraform -chdir=terraform init -backend=false
+terraform -chdir=terraform fmt -check -recursive
+terraform -chdir=terraform validate
+```
+
+O resultado esperado do último comando é `Success! The configuration is valid.` Esse procedimento valida a sintaxe, mas não executa deploy.
+
+### 5. Obter as informações das outras infraestruturas
+
+Antes de implantar, este repositório precisa receber das equipes responsáveis:
+
+- endpoint, porta, nome, usuário e senha do PostgreSQL;
+- pelo menos duas subnets para a Lambda de autenticação;
+- Security Group com acesso ao PostgreSQL;
+- URL pública da aplicação principal em `APP_BASE_URL`, sem `/api` no final;
+- bucket S3 usado como backend do estado Terraform.
+
+Esses recursos não devem ser recriados neste repositório.
+
+### 6. Fazer o deploy pelo GitHub Actions
+
+O caminho recomendado é o workflow **CD - Deploy Lambda AWS**:
+
+1. acesse `Settings > Secrets and variables > Actions` no GitHub;
+2. cadastre as variáveis e secrets descritos na seção **Pipeline de deploy**;
+3. inicie o AWS Academy Learner Lab;
+4. atualize `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN` com as credenciais da sessão atual;
+5. mantenha `DEPLOY_ENABLED=false` enquanto estiver apenas validando;
+6. altere para `DEPLOY_ENABLED=true` somente quando todos os valores externos estiverem corretos;
+7. acesse `Actions > CD - Deploy Lambda AWS > Run workflow`;
+8. acompanhe os passos de build, testes, plano e apply.
+
+> O deploy cria ou atualiza recursos na AWS e pode consumir créditos. Ao terminar uma demonstração, o grupo deve seguir seu procedimento combinado de desligamento ou destruição da infraestrutura.
+
+### 7. Descobrir a URL implantada
+
+Ao final do workflow, a URL aparece no resumo da execução. Também é possível obtê-la na máquina configurada com o mesmo backend Terraform:
+
+```powershell
+terraform -chdir=terraform output -raw api_url
+```
+
+Exemplo de resultado:
+
+```text
+https://abc123.execute-api.us-east-1.amazonaws.com/dev/auth/cpf
+```
+
+### 8. Testar a autenticação no Postman
+
+Crie uma requisição `POST` para a URL retornada, selecione **Body > raw > JSON** e envie:
+
+```json
+{
+  "cpf": "52998224725"
+}
+```
+
+Se o CPF for válido e o cliente estiver ativo no banco, a resposta será semelhante a:
+
+```json
+{
+  "token": "eyJ...",
+  "tipo": "Bearer",
+  "expiresIn": 3600,
+  "clienteId": 1
+}
+```
+
+### 9. Testar uma rota protegida
+
+Use a base protegida mostrada no output `protected_api_base_url`, acrescente o caminho real da aplicação e envie o JWT:
+
+```http
+GET https://abc123.execute-api.us-east-1.amazonaws.com/dev/api/rota-da-aplicacao
+Authorization: Bearer eyJ...
+```
+
+No Postman, selecione **Authorization > Bearer Token** e cole somente o valor de `token`. Com token válido, o Gateway encaminha a chamada. Sem token, com assinatura incorreta ou após a expiração, o Authorizer bloqueia o acesso.
+
+### 10. O que pode ser executado sem a AWS
+
+Localmente é possível:
+
+- compilar o JAR;
+- executar todos os testes unitários;
+- validar a formatação e a configuração Terraform;
+- estudar a geração e a validação do JWT pelos testes.
+
+O fluxo completo de API Gateway, Lambda e consulta ao RDS depende do ambiente AWS e das informações fornecidas pelas outras infraestruturas.
 
 ## Configuração da AWS Lambda
 
