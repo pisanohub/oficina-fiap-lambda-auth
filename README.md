@@ -286,12 +286,3 @@ Secrets do GitHub Actions:
 | `DB_PASSWORD` | Senha do PostgreSQL |
 
 As três credenciais AWS expiram quando a sessão do laboratório termina e precisam ser atualizadas antes de um novo deploy. Nenhum valor secreto deve ser incluído em commits ou logs.
-
-## Como explicar esta entrega ao grupo
-
-- **CPF não é um token:** ele é a informação usada para localizar e validar o cliente.
-- **A Lambda de autenticação emite o JWT:** ela valida o documento, consulta o cadastro e assina as claims.
-- **O Authorizer valida o JWT:** ele funciona como porteiro antes das rotas protegidas.
-- **O API Gateway aplica a decisão:** somente uma policy `Allow` alcança a aplicação principal.
-- **O mesmo segredo liga emissão e validação:** as duas Lambdas recebem o mesmo `JWT_SECRET` gerado pelo Terraform.
-- **A aplicação continua pertencendo ao outro time:** este repositório apenas encaminha a requisição para `APP_BASE_URL`.
