@@ -230,7 +230,7 @@ O diretório `terraform/` gerencia exclusivamente:
 
 - a Function AWS Lambda `oficina-cpf-auth`;
 - a Function AWS Lambda `oficina-jwt-authorizer`;
-- o segredo aleatório usado para assinar o JWT;
+- a configuração do segredo compartilhado nas duas Lambdas;
 - o endpoint `POST /auth/cpf` no Amazon API Gateway;
 - o Lambda Authorizer;
 - o proxy protegido `/api/{proxy+}`;
@@ -284,5 +284,20 @@ Secrets do GitHub Actions:
 | `AWS_SESSION_TOKEN` | Token temporário obrigatório do laboratório |
 | `DB_USERNAME` | Usuário do PostgreSQL |
 | `DB_PASSWORD` | Senha do PostgreSQL |
+| `JWT_SECRET` | Mesmo segredo da Spring API, com no mínimo 32 caracteres |
+
+### Configurar o segredo compartilhado
+
+O Terraform recebe `jwt_secret`, uma variável obrigatória e sensível, e fornece o mesmo valor como `JWT_SECRET` para a Lambda de autenticação e o Authorizer. Não há geração automática de outro segredo.
+
+1. Combine com o responsável pela aplicação o segredo do ambiente de destino.
+2. Cadastre esse valor em `Settings > Secrets and variables > Actions > New repository secret`, com o nome `JWT_SECRET`. Se existir um secret de mesmo nome no environment `dev`, confira seu valor também: ele tem precedência.
+3. O workflow repassa o valor por `TF_VAR_jwt_secret` para o Terraform.
+4. O responsável pela Spring API configura o mesmo valor na aplicação. Confiram também algoritmo, claims e interpretação da chave: a Lambda usa bytes UTF-8 do segredo, sem decodificar Base64.
+5. Após o deploy coordenado, emitam um JWT novo e testem a rota protegida até a aplicação.
+
+Não versionem o valor real. Para um plano local, forneçam a variável de ambiente `TF_VAR_jwt_secret` de maneira segura. O segredo deve ter pelo menos 32 caracteres, sem espaços ou quebras de linha nas extremidades. `sensitive` oculta a saída normal do Terraform, mas estado e planos ainda podem armazenar o valor e precisam de acesso restrito.
+
+Em ambientes existentes, o próximo plano pode indicar a remoção de `random_password.jwt` do estado e atualização das variáveis das Lambdas. O provider `random` permanece declarado para permitir essa transição. Revisem o plano antes de aplicar. Uma troca do segredo invalida tokens antigos; coordenem com a Spring API e considerem o cache do Authorizer (300 segundos) antes de testar.
 
 As três credenciais AWS expiram quando a sessão do laboratório termina e precisam ser atualizadas antes de um novo deploy. Nenhum valor secreto deve ser incluído em commits ou logs.
