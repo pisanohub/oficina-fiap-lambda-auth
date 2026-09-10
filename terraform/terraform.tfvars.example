@@ -19,3 +19,6 @@ db_password = "NAO_VERSIONAR_A_SENHA_REAL"
 app_base_url = "https://api.exemplo.com"
 
 environment = "dev"
+
+# jwt_secret e obrigatorio: forneca via TF_VAR_jwt_secret no ambiente local.
+# No GitHub Actions, use o Secret JWT_SECRET. Nunca versionar o valor real.

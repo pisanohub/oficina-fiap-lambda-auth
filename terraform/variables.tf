@@ -61,6 +61,18 @@ variable "db_password" {
   sensitive   = true
 }
 
+variable "jwt_secret" {
+  description = "Segredo compartilhado com a Spring API e fornecido para ambas as Lambdas"
+  type        = string
+  sensitive   = true
+  nullable    = false
+
+  validation {
+    condition     = length(var.jwt_secret) >= 32 && trimspace(var.jwt_secret) == var.jwt_secret
+    error_message = "jwt_secret deve ter pelo menos 32 caracteres e nenhuma quebra de linha ou espaco nas extremidades."
+  }
+}
+
 variable "jwt_expiration_seconds" {
   description = "Validade do JWT em segundos"
   type        = number
@@ -87,4 +99,3 @@ variable "app_base_url" {
     error_message = "app_base_url deve iniciar com http:// ou https://."
   }
 }
-

@@ -28,7 +28,7 @@ resource "aws_lambda_function" "cpf_auth" {
       DB_NAME                = var.db_name
       DB_USERNAME            = var.db_username
       DB_PASSWORD            = var.db_password
-      JWT_SECRET             = random_password.jwt.result
+      JWT_SECRET             = var.jwt_secret
       JWT_EXPIRATION_SECONDS = tostring(var.jwt_expiration_seconds)
     }
   }
@@ -55,7 +55,7 @@ resource "aws_lambda_function" "jwt_authorizer" {
 
   environment {
     variables = {
-      JWT_SECRET             = random_password.jwt.result
+      JWT_SECRET             = var.jwt_secret
       JWT_EXPIRATION_SECONDS = tostring(var.jwt_expiration_seconds)
     }
   }
@@ -65,4 +65,3 @@ resource "aws_lambda_function" "jwt_authorizer" {
     Ambiente = var.environment
   }
 }
-
