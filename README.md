@@ -6,6 +6,7 @@ Este repositório contém as Functions Serverless responsáveis pela autenticaç
 
 - [Diagramas de sequência](docs/diagramas-sequencia.md): autenticação por CPF, consulta protegida e abertura de ordem de serviço, com diagramas Mermaid visualizáveis no GitHub.
 - [RFC-001 — Estratégia de autenticação](docs/rfc-001-autenticacao.md): decisões, segredo compartilhado, responsabilidades, limitações e roteiro de validação integrada.
+- [ADRs](docs/adr/README.md): registros das decisões de arquitetura aceitas a partir da RFC.
 
 Os documentos distinguem o código implementado das pendências de integração. Compartilhar `JWT_SECRET` não basta: a identidade e as claims esperadas pela Spring API também precisam ser compatíveis com o token da Lambda. A RFC está proposta para revisão do grupo.
 
