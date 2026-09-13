@@ -113,7 +113,7 @@ resource "aws_api_gateway_deployment" "oficina" {
       aws_api_gateway_resource.api.id,
       aws_api_gateway_resource.api_proxy.id,
       aws_api_gateway_method.protected_proxy.id,
-      aws_api_gateway_integration.protected_app.id
+      aws_api_gateway_integration.protected_app.uri
     ]))
   }
 
