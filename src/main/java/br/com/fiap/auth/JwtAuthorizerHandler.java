@@ -65,27 +65,19 @@ public class JwtAuthorizerHandler implements RequestHandler<APIGatewayCustomAuth
         return token;
     }
 
+    private String recursoCoringa(String methodArn) {
+        if (methodArn == null || methodArn.isBlank()) {
+            return "*";
+        }
+        String[] partes = methodArn.split("/", 4);
+        if (partes.length < 2) {
+            return methodArn;
+        }
+        return partes[0] + "/" + partes[1] + "/*";
+    }
+
     private Map<String, Object> politica(String principalId,
                                          String efeito,
                                          String methodArn,
                                          Map<String, Object> contexto) {
-        String recurso = methodArn == null || methodArn.isBlank() ? "*" : methodArn;
-
-        Map<String, Object> statement = Map.of(
-                "Action", "execute-api:Invoke",
-                "Effect", efeito,
-                "Resource", recurso
-        );
-
-        Map<String, Object> policyDocument = Map.of(
-                "Version", "2012-10-17",
-                "Statement", List.of(statement)
-        );
-
-        return Map.of(
-                "principalId", principalId,
-                "policyDocument", policyDocument,
-                "context", contexto
-        );
-    }
-}
+        String recurso = recursoCoringa(methodArn);
