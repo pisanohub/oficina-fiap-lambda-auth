@@ -81,3 +81,22 @@ public class JwtAuthorizerHandler implements RequestHandler<APIGatewayCustomAuth
                                          String methodArn,
                                          Map<String, Object> contexto) {
         String recurso = recursoCoringa(methodArn);
+
+        Map<String, Object> statement = Map.of(
+                "Action", "execute-api:Invoke",
+                "Effect", efeito,
+                "Resource", recurso
+        );
+
+        Map<String, Object> policyDocument = Map.of(
+                "Version", "2012-10-17",
+                "Statement", List.of(statement)
+        );
+
+        return Map.of(
+                "principalId", principalId,
+                "policyDocument", policyDocument,
+                "context", contexto
+        );
+    }
+}
